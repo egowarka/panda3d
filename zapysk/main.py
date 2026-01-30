@@ -43,6 +43,9 @@ from panda3d.core import (
     PointLight,
     PNMImage,
     Texture,
+    Fog,
+    NodePath,
+    PointLight,
     TextNode,
     Vec3,
     Vec4,
@@ -199,6 +202,11 @@ class CorridorBuilder:
         self.textures["floor"] = self.load_tex(TEXTURE_DIR / "carpet.png")
         self.textures["ceiling"] = self.load_tex(TEXTURE_DIR / "ceiling.png")
         self.textures["door"] = self.load_tex(TEXTURE_DIR / "door.png")
+    def build(self) -> None:
+        self.textures["wall"] = self.base.loader.load_texture(str(TEXTURE_DIR / "wall.png"))
+        self.textures["floor"] = self.base.loader.load_texture(str(TEXTURE_DIR / "carpet.png"))
+        self.textures["ceiling"] = self.base.loader.load_texture(str(TEXTURE_DIR / "ceiling.png"))
+        self.textures["door"] = self.base.loader.load_texture(str(TEXTURE_DIR / "door.png"))
 
         self.create_floor()
         self.create_ceiling()
