@@ -36,7 +36,7 @@ class Game(ShowBase):
             self.floor_tex.setWrapV(Texture.WM_repeat)
 
         # --- Build level ---
-        self.build_corridor_level()
+        self.build_lobby_level()
 
         # --- Player state ---
         self.speed = 10.0
@@ -174,72 +174,67 @@ class Game(ShowBase):
             tex_tile=(max(1, int(length / 2)), max(1, int(height / 2)))
         )
 
-    def build_corridor_level(self):
+    def build_lobby_level(self):
         """
-        Схема:
-        - стартовый прямой коридор
-        - "перекрёсток" (с расширением)
-        - дальше прямой коридор к двери по центру
-        - боковые ответвления (налево/направо)
+        Квадратное лобби вокруг (0, 0, 0).
+        Игрок спавнится в центре и стоит на полу.
         """
-        half_width = 3.0
+        half_size = 6.0
         height = 3.0
-
-        # 1) Прямо от старта (коридор)
-        self.build_corridor_segment(y_center=10, length=20, half_width=half_width, height=height)
-
-        # 2) Зона развилки (чуть шире)
-        self.build_corridor_segment(y_center=30, length=12, half_width=5.0, height=height)
-
-        # 3) Прямо после развилки к двери
-        self.build_corridor_segment(y_center=50, length=20, half_width=half_width, height=height)
-
-        # 4) Левый коридор (идёт по X- оси)
-        # Сделаем “рукав”: строим его как сегменты, но повернуть проще: просто собрать боксы вручную.
-        # Пол
-        self.make_box(pos=(-18, 30, -0.2), scale=(10, half_width, 0.2),
-                      color=(0.6, 0.6, 0.6, 1.0), textured=True, tex_tile=(10, 6))
-        # Потолок
-        self.make_box(pos=(-18, 30, height + 0.2), scale=(10, half_width, 0.2),
-                      color=(0.25, 0.25, 0.25, 1.0), textured=True, tex_tile=(10, 6))
-        # Стены рукава (по Y)
         wall_thick = 0.25
-        self.make_box(pos=(-18, 30 - half_width - wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
-        self.make_box(pos=(-18, 30 + half_width + wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
-        # Торец в конце левого коридора (закрываем)
-        self.make_box(pos=(-28.5, 30, height / 2.0), scale=(0.25, half_width, height / 2.0),
-                      color=(0.25, 0.25, 0.27, 1.0))
+        floor_thick = 0.2
 
-        # 5) Правый коридор (симметрично)
-        self.make_box(pos=(18, 30, -0.2), scale=(10, half_width, 0.2),
-                      color=(0.6, 0.6, 0.6, 1.0), textured=True, tex_tile=(10, 6))
-        self.make_box(pos=(18, 30, height + 0.2), scale=(10, half_width, 0.2),
-                      color=(0.25, 0.25, 0.25, 1.0), textured=True, tex_tile=(10, 6))
-        self.make_box(pos=(18, 30 - half_width - wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
-        self.make_box(pos=(18, 30 + half_width + wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
-        self.make_box(pos=(28.5, 30, height / 2.0), scale=(0.25, half_width, height / 2.0),
-                      color=(0.25, 0.25, 0.27, 1.0))
+        floor_z = -floor_thick
+        ceil_z = height + floor_thick
 
-        # 6) Дверь по центру в конце прямого коридора (по Y дальше)
-        # Дверь стоит на Y ~ 60, центр X=0
-        door_w = 1.2
-        door_h = 2.2
-        door_th = 0.2
-        self.door = self.make_box(
-            pos=(0, 60, door_h / 2.0),
-            scale=(door_w / 2.0, door_th, door_h / 2.0),
-            color=(0.35, 0.22, 0.12, 1.0)
+        # Пол
+        self.make_box(
+            pos=(0, 0, floor_z),
+            scale=(half_size, half_size, floor_thick),
+            color=(0.6, 0.6, 0.6, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(half_size)), max(1, int(half_size)))
         )
 
-        # 7) Стена-торец за дверью (как "рамка/преграда")
+        # Потолок
         self.make_box(
-            pos=(0, 61, height / 2.0),
-            scale=(half_width, 0.25, height / 2.0),
-            color=(0.25, 0.25, 0.27, 1.0)
+            pos=(0, 0, ceil_z),
+            scale=(half_size, half_size, floor_thick),
+            color=(0.25, 0.25, 0.25, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(half_size)), max(1, int(half_size)))
+        )
+
+        # Стены по Y (север/юг)
+        self.make_box(
+            pos=(0, half_size + wall_thick, height / 2.0),
+            scale=(half_size, wall_thick, height / 2.0),
+            color=(0.32, 0.32, 0.35, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(half_size)), max(1, int(height / 2)))
+        )
+        self.make_box(
+            pos=(0, -half_size - wall_thick, height / 2.0),
+            scale=(half_size, wall_thick, height / 2.0),
+            color=(0.32, 0.32, 0.35, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(half_size)), max(1, int(height / 2)))
+        )
+
+        # Стены по X (восток/запад)
+        self.make_box(
+            pos=(half_size + wall_thick, 0, height / 2.0),
+            scale=(wall_thick, half_size, height / 2.0),
+            color=(0.32, 0.32, 0.35, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(half_size)), max(1, int(height / 2)))
+        )
+        self.make_box(
+            pos=(-half_size - wall_thick, 0, height / 2.0),
+            scale=(wall_thick, half_size, height / 2.0),
+            color=(0.32, 0.32, 0.35, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(half_size)), max(1, int(height / 2)))
         )
 
     # ===== Player controls =====
