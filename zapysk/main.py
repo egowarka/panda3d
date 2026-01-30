@@ -1,6 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import WindowProperties, Vec3
 from panda3d.core import CollisionTraverser, CollisionNode, CollisionRay, CollisionHandlerQueue
+from panda3d.core import CollisionHandlerPusher, CollisionSphere
 from panda3d.core import BitMask32, Texture, TextureStage
 import math
 
@@ -40,6 +41,7 @@ class Game(ShowBase):
         # --- Player state ---
         self.speed = 10.0
         self.player_height = 1.7
+        self.player_radius = 0.4
 
         self.gravity = 24.0
         self.jump_speed = 8.5
@@ -52,8 +54,11 @@ class Game(ShowBase):
         self.capture_mouse = True
         self.win.movePointer(0, self.center_x, self.center_y)
 
-        self.player_pos = Vec3(0, 0, self.player_height)
-        self.camera.setPos(self.player_pos)
+        self.player_pos = Vec3(0, 0, 0.0)
+        self.player_np = self.render.attachNewNode("player")
+        self.player_np.setPos(self.player_pos)
+        self.camera.reparentTo(self.player_np)
+        self.camera.setPos(0, 0, self.player_height)
         self.camera.setHpr(self.heading, self.pitch, 0)
 
         # --- Input ---
@@ -74,22 +79,33 @@ class Game(ShowBase):
 
         self.accept("escape", self.toggle_mouse)
 
-        # --- Ground ray (держим на полу) ---
+        # --- Collisions ---
         self.cTrav = CollisionTraverser()
+
+        self.pusher = CollisionHandlerPusher()
+        player_col = CollisionNode("playerCol")
+        player_col.addSolid(CollisionSphere(0, 0, self.player_height * 0.5, self.player_radius))
+        player_col.setFromCollideMask(MASK_LEVEL)
+        player_col.setIntoCollideMask(BitMask32.allOff())
+        self.player_col_np = self.player_np.attachNewNode(player_col)
+        self.pusher.addCollider(self.player_col_np, self.player_np)
+        self.cTrav.addCollider(self.player_col_np, self.pusher)
+
+        # Ground ray (держим на полу)
         self.ground_handler = CollisionHandlerQueue()
 
         ray_node = CollisionNode("groundRay")
         ray_node.addSolid(CollisionRay(0, 0, 100, 0, 0, -1))
         ray_node.setFromCollideMask(MASK_LEVEL)
         ray_node.setIntoCollideMask(BitMask32.allOff())
-        self.ground_ray_np = self.camera.attachNewNode(ray_node)
+        self.ground_ray_np = self.player_np.attachNewNode(ray_node)
         self.cTrav.addCollider(self.ground_ray_np, self.ground_handler)
 
         self.taskMgr.add(self.update, "update")
 
     # ===== Level construction =====
 
-    def make_box(self, pos, scale, color=(0.35, 0.35, 0.35, 1.0), textured_floor=False, tex_tile=(1, 1)):
+    def make_box(self, pos, scale, color=(0.35, 0.35, 0.35, 1.0), textured=False, tex_tile=(1, 1)):
         """
         pos: (x, y, z)
         scale: (sx, sy, sz)
@@ -105,7 +121,7 @@ class Game(ShowBase):
         n.clearColor()
         n.setColor(color[0], color[1], color[2], color[3])
 
-        if textured_floor and self.floor_tex:
+        if textured and self.floor_tex:
             n.setTexture(self.floor_tex, 1)
             n.setTexScale(TextureStage.getDefault(), tex_tile[0], tex_tile[1])
 
@@ -127,7 +143,7 @@ class Game(ShowBase):
             pos=(0, y0, floor_z),
             scale=(half_width, length / 2.0, floor_thick),
             color=(0.6, 0.6, 0.6, 1.0),
-            textured_floor=True,
+            textured=True,
             tex_tile=(max(1, int(half_width)), max(1, int(length / 2)))
         )
 
@@ -136,21 +152,26 @@ class Game(ShowBase):
             pos=(0, y0, ceil_z),
             scale=(half_width, length / 2.0, floor_thick),
             color=(0.25, 0.25, 0.25, 1.0),
-            textured_floor=False
+            textured=True,
+            tex_tile=(max(1, int(half_width)), max(1, int(length / 2)))
         )
 
         # Левая стена
         self.make_box(
             pos=(-half_width - wall_thick, y0, height / 2.0),
             scale=(wall_thick, length / 2.0, height / 2.0),
-            color=(0.32, 0.32, 0.35, 1.0)
+            color=(0.32, 0.32, 0.35, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(length / 2)), max(1, int(height / 2)))
         )
 
         # Правая стена
         self.make_box(
             pos=(half_width + wall_thick, y0, height / 2.0),
             scale=(wall_thick, length / 2.0, height / 2.0),
-            color=(0.32, 0.32, 0.35, 1.0)
+            color=(0.32, 0.32, 0.35, 1.0),
+            textured=True,
+            tex_tile=(max(1, int(length / 2)), max(1, int(height / 2)))
         )
 
     def build_corridor_level(self):
@@ -177,29 +198,29 @@ class Game(ShowBase):
         # Сделаем “рукав”: строим его как сегменты, но повернуть проще: просто собрать боксы вручную.
         # Пол
         self.make_box(pos=(-18, 30, -0.2), scale=(10, half_width, 0.2),
-                      color=(0.6, 0.6, 0.6, 1.0), textured_floor=True, tex_tile=(10, 6))
+                      color=(0.6, 0.6, 0.6, 1.0), textured=True, tex_tile=(10, 6))
         # Потолок
         self.make_box(pos=(-18, 30, height + 0.2), scale=(10, half_width, 0.2),
-                      color=(0.25, 0.25, 0.25, 1.0))
+                      color=(0.25, 0.25, 0.25, 1.0), textured=True, tex_tile=(10, 6))
         # Стены рукава (по Y)
         wall_thick = 0.25
         self.make_box(pos=(-18, 30 - half_width - wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0))
+                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
         self.make_box(pos=(-18, 30 + half_width + wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0))
+                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
         # Торец в конце левого коридора (закрываем)
         self.make_box(pos=(-28.5, 30, height / 2.0), scale=(0.25, half_width, height / 2.0),
                       color=(0.25, 0.25, 0.27, 1.0))
 
         # 5) Правый коридор (симметрично)
         self.make_box(pos=(18, 30, -0.2), scale=(10, half_width, 0.2),
-                      color=(0.6, 0.6, 0.6, 1.0), textured_floor=True, tex_tile=(10, 6))
+                      color=(0.6, 0.6, 0.6, 1.0), textured=True, tex_tile=(10, 6))
         self.make_box(pos=(18, 30, height + 0.2), scale=(10, half_width, 0.2),
-                      color=(0.25, 0.25, 0.25, 1.0))
+                      color=(0.25, 0.25, 0.25, 1.0), textured=True, tex_tile=(10, 6))
         self.make_box(pos=(18, 30 - half_width - wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0))
+                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
         self.make_box(pos=(18, 30 + half_width + wall_thick, height / 2.0), scale=(10, wall_thick, height / 2.0),
-                      color=(0.32, 0.32, 0.35, 1.0))
+                      color=(0.32, 0.32, 0.35, 1.0), textured=True, tex_tile=(10, 3))
         self.make_box(pos=(28.5, 30, height / 2.0), scale=(0.25, half_width, height / 2.0),
                       color=(0.25, 0.25, 0.27, 1.0))
 
@@ -258,7 +279,7 @@ class Game(ShowBase):
 
         self.camera.setHpr(self.heading, self.pitch, 0)
 
-        # WASD movement (free movement, no wall collisions yet)
+        # WASD movement
         move = Vec3(0, 0, 0)
         if self.keys["w"]:
             move.y += 1
@@ -290,9 +311,12 @@ class Game(ShowBase):
         self.vel_z -= self.gravity * dt
         self.player_pos.z += self.vel_z * dt
 
-        # Ground snap
-        self.camera.setPos(self.player_pos.x, self.player_pos.y, self.player_pos.z)
+        # Apply position before collisions
+        self.player_np.setPos(self.player_pos)
         self.cTrav.traverse(self.render)
+
+        # Sync back in case pusher moved us
+        self.player_pos = self.player_np.getPos()
 
         self.on_ground = False
         if self.ground_handler.getNumEntries() > 0:
@@ -300,7 +324,7 @@ class Game(ShowBase):
             entry = self.ground_handler.getEntry(0)
             hit_z = entry.getSurfacePoint(self.render).z
 
-            floor_z = hit_z + self.player_height
+            floor_z = hit_z
             if self.player_pos.z <= floor_z:
                 self.player_pos.z = floor_z
                 self.vel_z = 0.0
@@ -311,7 +335,7 @@ class Game(ShowBase):
             self.on_ground = False
         self.jump_requested = False
 
-        self.camera.setPos(self.player_pos)
+        self.player_np.setPos(self.player_pos)
         return task.cont
 
 
