@@ -37,6 +37,12 @@ from panda3d.core import (
     BitMask32,
     CardMaker,
     ClockObject,
+    Filename,
+    Fog,
+    NodePath,
+    PointLight,
+    PNMImage,
+    Texture,
     Fog,
     NodePath,
     PointLight,
@@ -173,6 +179,29 @@ class CorridorBuilder:
         self.root = self.base.render.attach_new_node("corridor")
         self.textures = {}
 
+    def load_tex(self, path: Path) -> Texture:
+        filename = Filename.fromOsSpecific(str(path))
+        print("Loading texture:", filename)
+        print("Exists:", path.exists())
+        if not path.exists():
+            return self.make_fallback_texture()
+        texture = self.base.loader.loadTexture(filename)
+        if texture is None:
+            return self.make_fallback_texture()
+        return texture
+
+    def make_fallback_texture(self) -> Texture:
+        image = PNMImage(1, 1)
+        image.fill(0.2, 0.2, 0.2)
+        texture = Texture("fallback")
+        texture.load(image)
+        return texture
+
+    def build(self) -> None:
+        self.textures["wall"] = self.load_tex(TEXTURE_DIR / "wall.png")
+        self.textures["floor"] = self.load_tex(TEXTURE_DIR / "carpet.png")
+        self.textures["ceiling"] = self.load_tex(TEXTURE_DIR / "ceiling.png")
+        self.textures["door"] = self.load_tex(TEXTURE_DIR / "door.png")
     def build(self) -> None:
         self.textures["wall"] = self.base.loader.load_texture(str(TEXTURE_DIR / "wall.png"))
         self.textures["floor"] = self.base.loader.load_texture(str(TEXTURE_DIR / "carpet.png"))
